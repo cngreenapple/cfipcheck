@@ -13,18 +13,31 @@ export default async function handler(req, res) {
   const targetUrl = `${tls === 'true' ? 'https' : 'http'}://${host}/cdn-cgi/trace`;
 
   try {
-    const response = await fetch(targetUrl, { agent, timeout: 7000 });
-    const text = await response.text();
+    // 1. Test proxy by connecting to Cloudflare trace
+    const cfRes = await fetch(targetUrl, { agent, timeout: 7000 });
+    const cfText = await cfRes.text();
 
-    const result = Object.fromEntries(
-      text
+    const cfData = Object.fromEntries(
+      cfText
         .split('\n')
         .filter(line => line.includes('='))
         .map(line => line.split('=').map(s => s.trim()))
     );
 
-    result.clientIp = ip;
-    result.proxyip = true;
+    // 2. Get GeoIP info from ip-api.com
+    const ipApiRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,regionName,city,lat,lon,isp,org,as,reverse,proxy,mobile,hosting,query`);
+    const ipApiData = await ipApiRes.json();
+
+    // 3. Merge and return
+    const result = {
+      proxyTest: {
+        target: targetUrl,
+        ...cfData,
+        proxyip: true,
+        clientIp: ip,
+      },
+      geoInfo: ipApiData
+    };
 
     res.status(200).json(result);
   } catch (error) {
