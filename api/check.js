@@ -1,19 +1,29 @@
+import express from 'express';
 import fetch from 'node-fetch';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
-export default async function handler(req, res) {
-  const { ip, port, host, tls } = req.query;
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  if (!ip || !port || !host) {
-    return res.status(400).json({ error: 'Required query: ip, port, host' });
+app.get('/check', async (req, res) => {
+  let { ip, port } = req.query;
+
+  // ✅ Parsing ip:port jika gabung
+  if (ip && ip.includes(':') && !port) {
+    const [parsedIp, parsedPort] = ip.split(':');
+    ip = parsedIp;
+    port = parsedPort;
+  }
+
+  if (!ip || !port) {
+    return res.status(400).json({ error: 'Please provide ip and port (either as ?ip=IP&port=PORT or ?ip=IP:PORT)' });
   }
 
   const proxyUrl = `http://${ip}:${port}`;
   const agent = new HttpsProxyAgent(proxyUrl);
-  const targetUrl = `${tls === 'true' ? 'https' : 'http'}://${host}/cdn-cgi/trace`;
+  const targetUrl = 'https://speed.cloudflare.com/cdn-cgi/trace'; // ✅ Fixed target
 
   try {
-    // 1. Request to Cloudflare via proxy
     const cfRes = await fetch(targetUrl, { agent, timeout: 7000 });
     const cfText = await cfRes.text();
 
@@ -24,17 +34,13 @@ export default async function handler(req, res) {
         .map(line => line.split('=').map(s => s.trim()))
     );
 
-    // 2. IP-API geo lookup
-    const ipApiRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon,isp,org,as,reverse,proxy,mobile,hosting,query`);
+    const ipApiRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon,isp,org,as,proxy`);
     const ipApiData = await ipApiRes.json();
 
-    // 3. Format & return merged result
     const result = {
       proxy: ip,
       port: Number(port),
       proxyip: true,
-      colo: cfData.colo || null,
-      tls: cfData.tls || null,
       status: ipApiData.status,
       country: ipApiData.country,
       regionName: ipApiData.regionName,
@@ -46,8 +52,16 @@ export default async function handler(req, res) {
       as: ipApiData.as
     };
 
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(500).json({ error: 'Proxy request failed', detail: error.message });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Proxy test failed', detail: err.message });
   }
-}
+});
+
+app.get('/', (req, res) => {
+  res.send('Proxy Checker API is running. Use /check?ip=IP:PORT or /check?ip=IP&port=PORT');
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
