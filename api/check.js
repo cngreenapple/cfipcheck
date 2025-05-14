@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   const targetUrl = `${tls === 'true' ? 'https' : 'http'}://${host}/cdn-cgi/trace`;
 
   try {
-    // 1. Test proxy by connecting to Cloudflare trace
+    // 1. Request to Cloudflare via proxy
     const cfRes = await fetch(targetUrl, { agent, timeout: 7000 });
     const cfText = await cfRes.text();
 
@@ -24,19 +24,26 @@ export default async function handler(req, res) {
         .map(line => line.split('=').map(s => s.trim()))
     );
 
-    // 2. Get GeoIP info from ip-api.com
-    const ipApiRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,regionName,city,lat,lon,isp,org,as,reverse,proxy,mobile,hosting,query`);
+    // 2. IP-API geo lookup
+    const ipApiRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon,isp,org,as,reverse,proxy,mobile,hosting,query`);
     const ipApiData = await ipApiRes.json();
 
-    // 3. Merge and return
+    // 3. Format & return merged result
     const result = {
-      proxyTest: {
-        target: targetUrl,
-        ...cfData,
-        proxyip: true,
-        clientIp: ip,
-      },
-      geoInfo: ipApiData
+      proxy: ip,
+      port: Number(port),
+      proxyip: true,
+      colo: cfData.colo || null,
+      tls: cfData.tls || null,
+      status: ipApiData.status,
+      country: ipApiData.country,
+      regionName: ipApiData.regionName,
+      city: ipApiData.city,
+      lat: ipApiData.lat,
+      lon: ipApiData.lon,
+      isp: ipApiData.isp,
+      org: ipApiData.org,
+      as: ipApiData.as
     };
 
     res.status(200).json(result);
