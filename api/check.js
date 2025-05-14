@@ -1,14 +1,10 @@
-import express from 'express';
 import fetch from 'node-fetch';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.get('/check', async (req, res) => {
+export default async function handler(req, res) {
   let { ip, port } = req.query;
 
-  // ✅ Parsing ip:port jika gabung
+  // ✅ Parsing jika ip:port digabung
   if (ip && ip.includes(':') && !port) {
     const [parsedIp, parsedPort] = ip.split(':');
     ip = parsedIp;
@@ -16,14 +12,15 @@ app.get('/check', async (req, res) => {
   }
 
   if (!ip || !port) {
-    return res.status(400).json({ error: 'Please provide ip and port (either as ?ip=IP&port=PORT or ?ip=IP:PORT)' });
+    return res.status(400).json({ error: 'Please provide ip and port (either as ?ip=IP:PORT or ?ip=IP&port=PORT)' });
   }
 
   const proxyUrl = `http://${ip}:${port}`;
   const agent = new HttpsProxyAgent(proxyUrl);
-  const targetUrl = 'https://speed.cloudflare.com/cdn-cgi/trace'; // ✅ Fixed target
+  const targetUrl = 'https://speed.cloudflare.com/cdn-cgi/trace';
 
   try {
+    // Step 1: Fetch ke Cloudflare
     const cfRes = await fetch(targetUrl, { agent, timeout: 7000 });
     const cfText = await cfRes.text();
 
@@ -34,13 +31,17 @@ app.get('/check', async (req, res) => {
         .map(line => line.split('=').map(s => s.trim()))
     );
 
+    // Step 2: Lookup geolokasi dari ip-api
     const ipApiRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon,isp,org,as,proxy`);
     const ipApiData = await ipApiRes.json();
 
+    // Step 3: Gabungkan hasil
     const result = {
       proxy: ip,
       port: Number(port),
       proxyip: true,
+      colo: cfData.colo || null,
+      tls: cfData.tls || null,
       status: ipApiData.status,
       country: ipApiData.country,
       regionName: ipApiData.regionName,
@@ -52,16 +53,8 @@ app.get('/check', async (req, res) => {
       as: ipApiData.as
     };
 
-    res.json(result);
+    res.status(200).json(result);
   } catch (err) {
-    res.status(500).json({ error: 'Proxy test failed', detail: err.message });
+    res.status(500).json({ error: 'Proxy check failed', detail: err.message });
   }
-});
-
-app.get('/', (req, res) => {
-  res.send('Proxy Checker API is running. Use /check?ip=IP:PORT or /check?ip=IP&port=PORT');
-});
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+}
