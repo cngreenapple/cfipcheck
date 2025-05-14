@@ -45,8 +45,6 @@ export default async function handler(req, res) {
       proxy: ip,
       port: Number(port),
       proxyip: true,
-      colo: cfData.colo || null,
-      tls: cfData.tls || null,
       status: ipApiData.status,
       country: ipApiData.country,
       regionName: ipApiData.regionName,
@@ -62,7 +60,7 @@ export default async function handler(req, res) {
   } catch (err) {
     // Menangani error dan menampilkan format yang diinginkan
     return res.status(500).json({
-      proxyip: false,
+      proxyip: "false",
       error: "Proxy check failed",
       detail: cleanErrorMessage(err.message)
     });
