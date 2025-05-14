@@ -12,9 +12,12 @@ export default async function handler(req, res) {
   const agent = new HttpsProxyAgent(proxyUrl);
   const targetUrl = `${tls === 'true' ? 'https' : 'http'}://${host}/cdn-cgi/trace`;
 
+  const startTime = Date.now();
+
   try {
-    // 1. Test proxy by connecting to Cloudflare trace
+    // 1. Fetch from Cloudflare via proxy
     const cfRes = await fetch(targetUrl, { agent, timeout: 7000 });
+    const delay = Date.now() - startTime;
     const cfText = await cfRes.text();
 
     const cfData = Object.fromEntries(
@@ -24,22 +27,41 @@ export default async function handler(req, res) {
         .map(line => line.split('=').map(s => s.trim()))
     );
 
-    // 2. Get GeoIP info from ip-api.com
-    const ipApiRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,regionName,city,lat,lon,isp,org,as,reverse,proxy,mobile,hosting,query`);
-    const ipApiData = await ipApiRes.json();
+    // 2. Try primary Geo API (ip-api)
+    let geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,regionName,city,lat,lon,isp,org,as,reverse,proxy,mobile,hosting,query,timezone,zip,region`);
+    let geoData = await geoRes.json();
 
-    // 3. Merge and return
-    const result = {
-      proxyTest: {
-        target: targetUrl,
-        ...cfData,
-        proxyip: true,
-        clientIp: ip,
-      },
-      geoInfo: ipApiData
+    // 3. Fallback to ipwho.is if ip-api fails or incomplete
+    if (geoData.status !== "success" || !geoData.country) {
+      const fallback = await fetch(`https://ipwho.is/${ip}`);
+      geoData = await fallback.json();
+    }
+
+    // 4. Build uniform response
+    const response = {
+      proxy: ip,
+      port: parseInt(port),
+      proxyip: true,
+      delay: delay,
+      ip: cfData.ip || geoData.ip || ip,
+      colo: cfData.colo || null,
+      longitude: geoData.lon || geoData.longitude || null,
+      latitude: geoData.lat || geoData.latitude || null,
+      httpProtocol: cfData.http || cfData["http"] || null,
+      continent: geoData.continent_code || geoData.continentCode || geoData.continent || null,
+      asn: parseInt(cfData.asn?.replace("AS", "")) || geoData.asn || null,
+      country: geoData.country || geoData.country_code || null,
+      tlsVersion: cfData.tls || null,
+      city: geoData.city || null,
+      timezone: geoData.timezone || null,
+      postalCode: geoData.zip || geoData.postal || null,
+      region: geoData.regionName || geoData.region || null,
+      regionCode: geoData.region || geoData.region_code || null,
+      asOrganization: cfData.asOrganization || geoData.org || geoData.connection?.organization || null
     };
 
-    res.status(200).json(result);
+    res.status(200).json(response);
+
   } catch (error) {
     res.status(500).json({ error: 'Proxy request failed', detail: error.message });
   }
