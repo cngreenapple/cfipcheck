@@ -1,11 +1,8 @@
-import express from 'express';
+// api/proxy-checker.js
 import fetch from 'node-fetch';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.get('/check', async (req, res) => {
+export default async (req, res) => {
   const { proxy } = req.query;
   if (!proxy) return res.status(400).json({ error: 'Query ?proxy=ip:port is required' });
 
@@ -13,10 +10,8 @@ app.get('/check', async (req, res) => {
     const agent = new HttpsProxyAgent(`http://${proxy}`);
     const response = await fetch('https://speed.cloudflare.com/cdn-cgi/trace/', { agent, timeout: 5000 });
     const data = await response.text();
-    res.type('text').send(data);
+    res.status(200).send(data);
   } catch (err) {
     res.status(500).json({ error: 'Proxy failed or unreachable', detail: err.message });
   }
-});
-
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+};
