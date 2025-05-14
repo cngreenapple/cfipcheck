@@ -1,13 +1,8 @@
 {
-  "name": "proxy-checker",
+  "name": "proxy-checker-vercel",
   "version": "1.0.0",
-  "main": "index.js",
   "type": "module",
-  "scripts": {
-    "start": "node index.js"
-  },
   "dependencies": {
-    "express": "^4.18.2",
     "https-proxy-agent": "^7.0.2",
     "node-fetch": "^3.3.2"
   }
