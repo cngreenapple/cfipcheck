@@ -1,7 +1,7 @@
 {
   "redirects": [
     {
-      "source": "/",
+      "source": "/(?!api/check).*",
       "destination": "https://countdown.void.biz.id/",
       "permanent": true
     }
