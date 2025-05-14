@@ -4,13 +4,14 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 export default async function handler(req, res) {
   let { ip, port } = req.query;
 
-  // Handle ip:port combined format
+  // Handle ip:port format jika digabung
   if (ip && ip.includes(':') && !port) {
     const [parsedIp, parsedPort] = ip.split(':');
     ip = parsedIp;
     port = parsedPort;
   }
 
+  // Jika ip atau port kosong, kembalikan error
   if (!ip || !port) {
     return res.status(400).json({
       proxyip: false,
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
   const targetUrl = 'https://speed.cloudflare.com/cdn-cgi/trace';
 
   try {
-    // Step 1: Check Cloudflare trace
+    // Step 1: Mengambil trace dari Cloudflare
     const cfRes = await fetch(targetUrl, { agent, timeout: 7000 });
     const cfText = await cfRes.text();
 
@@ -35,10 +36,11 @@ export default async function handler(req, res) {
         .map(line => line.split('=').map(s => s.trim()))
     );
 
-    // Step 2: Get geo data from ip-api
+    // Step 2: Mendapatkan data geolokasi dari ip-api
     const ipApiRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon,isp,org,as,proxy`);
     const ipApiData = await ipApiRes.json();
 
+    // Step 3: Menggabungkan hasil dan mengirimkan response
     const result = {
       proxy: ip,
       port: Number(port),
@@ -58,10 +60,18 @@ export default async function handler(req, res) {
 
     return res.status(200).json(result);
   } catch (err) {
+    // Menangani error dan menampilkan format yang diinginkan
     return res.status(500).json({
       proxyip: false,
       error: "Proxy check failed",
-      detail: err.message
+      detail: cleanErrorMessage(err.message)
     });
   }
+}
+
+// Fungsi untuk membersihkan pesan error, hanya mengambil bagian koneksi yang relevan
+function cleanErrorMessage(message) {
+  // Mengambil pesan "connect ECONNREFUSED IP:PORT"
+  const match = message.match(/(connect\s+\w+\s+[0-9.]+:\d+)/i);
+  return match ? match[1] : message;
 }
