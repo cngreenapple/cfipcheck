@@ -1,9 +1,8 @@
 {
-  "redirects": [
+  "routes": [
     {
-      "source": "/(?!api/check).*",
-      "destination": "https://countdown.void.biz.id/",
-      "permanent": true
+      "src": "/",
+      "dest": "/public/countdown.html"
     }
   ]
 }
